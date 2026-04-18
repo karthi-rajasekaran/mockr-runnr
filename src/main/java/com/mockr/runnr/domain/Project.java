@@ -2,6 +2,9 @@ package com.mockr.runnr.domain;
 
 import java.util.UUID;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -13,7 +16,8 @@ import lombok.Setter;
 public class Project {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID) // works with SQLite auto-increment
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     private UUID id;
 
     @Column(nullable = false)

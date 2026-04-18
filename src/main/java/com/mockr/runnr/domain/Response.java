@@ -8,6 +8,9 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 /**
  * Response Entity - Represents a mock response with conditions and headers.
  * 
@@ -22,8 +25,8 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "response", indexes = {
-        @Index(name = "idx_endpoint_id", columnList = "endpoint_id"),
-        @Index(name = "idx_status_code", columnList = "status_code")
+                @Index(name = "idx_endpoint_id", columnList = "endpoint_id"),
+                @Index(name = "idx_status_code", columnList = "status_code")
 })
 @Data
 @NoArgsConstructor
@@ -33,50 +36,52 @@ import java.util.UUID;
 @EqualsAndHashCode(exclude = { "endpoint", "conditions", "responseHeaders" })
 public class Response {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+        @Id
+        @GeneratedValue(strategy = GenerationType.UUID)
+        @JdbcTypeCode(SqlTypes.VARCHAR)
+        private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY, cascade = { CascadeType.PERSIST, CascadeType.MERGE })
-    @JoinColumn(name = "endpoint_id", nullable = false)
-    private Endpoint endpoint;
+        @ManyToOne(fetch = FetchType.LAZY, cascade = { CascadeType.PERSIST, CascadeType.MERGE })
+        @JoinColumn(name = "endpoint_id", nullable = false)
+        private Endpoint endpoint;
 
-    @Column(name = "status_code", nullable = false)
-    private Integer statusCode;
+        @Column(name = "status_code", nullable = false)
+        private Integer statusCode;
 
-    @Column(name = "content_type", length = 100)
-    @Builder.Default
-    private String contentType = "application/json";
+        @Column(name = "content_type", length = 100)
+        @Builder.Default
+        private String contentType = "application/json";
 
-    @Column(name = "response_body", columnDefinition = "TEXT")
-    private String responseBody;
+        @Column(name = "response_body", columnDefinition = "TEXT")
+        private String responseBody;
 
-    @Column(name = "is_default")
-    @Builder.Default
-    private Boolean isDefault = false;
+        @Column(name = "is_default")
+        @JdbcTypeCode(SqlTypes.INTEGER)
+        @Builder.Default
+        private Boolean isDefault = false;
 
-    @Column(name = "description", length = 500)
-    private String description;
+        @Column(name = "description", length = 500)
+        private String description;
 
-    @OneToMany(cascade = { CascadeType.PERSIST, CascadeType.MERGE,
-            CascadeType.REMOVE }, orphanRemoval = true, fetch = FetchType.LAZY, mappedBy = "response")
-    @Builder.Default
-    private Set<Condition> conditions = new HashSet<>();
+        @OneToMany(cascade = { CascadeType.PERSIST, CascadeType.MERGE,
+                        CascadeType.REMOVE }, orphanRemoval = true, fetch = FetchType.LAZY, mappedBy = "response")
+        @Builder.Default
+        private Set<Condition> conditions = new HashSet<>();
 
-    @OneToMany(cascade = { CascadeType.PERSIST, CascadeType.MERGE,
-            CascadeType.REMOVE }, orphanRemoval = true, fetch = FetchType.LAZY, mappedBy = "response")
-    @Builder.Default
-    private Set<ResponseHeader> responseHeaders = new HashSet<>();
+        @OneToMany(cascade = { CascadeType.PERSIST, CascadeType.MERGE,
+                        CascadeType.REMOVE }, orphanRemoval = true, fetch = FetchType.LAZY, mappedBy = "response")
+        @Builder.Default
+        private Set<ResponseHeader> responseHeaders = new HashSet<>();
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    @Builder.Default
-    private LocalDateTime createdAt = LocalDateTime.now();
+        @Column(name = "created_at", nullable = false, updatable = false)
+        @Builder.Default
+        private LocalDateTime createdAt = LocalDateTime.now();
 
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+        @Column(name = "updated_at")
+        private LocalDateTime updatedAt;
 
-    @PreUpdate
-    private void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
+        @PreUpdate
+        private void onUpdate() {
+                this.updatedAt = LocalDateTime.now();
+        }
 }
