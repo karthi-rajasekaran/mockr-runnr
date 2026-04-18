@@ -6,9 +6,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +18,8 @@ import com.mockr.runnr.dto.MockRequest;
 import com.mockr.runnr.service.MockApiService;
 
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * MockApiController - Catch-all REST controller for mock request handling.
@@ -35,18 +34,13 @@ import jakarta.servlet.http.HttpServletRequest;
  * - Logs request/response for debugging
  * - All exceptions handled by global exception handler
  */
+@Slf4j
 @RestController
 @RequestMapping("/**")
+@RequiredArgsConstructor
 public class MockApiController {
 
-    private static final Logger logger = LoggerFactory.getLogger(MockApiController.class);
-
     private final MockApiService mockApiService;
-
-    @Autowired
-    public MockApiController(MockApiService mockApiService) {
-        this.mockApiService = mockApiService;
-    }
 
     /**
      * Catch-all handler for all HTTP requests on any path and method.
@@ -88,7 +82,7 @@ public class MockApiController {
 
         } catch (Exception e) {
             // Log exception - will be handled by global exception handler
-            logger.error("Error processing request: {}", request.getRequestURI(), e);
+            log.error("Error processing request: {}", request.getRequestURI(), e);
             throw e;
         }
     }
@@ -135,7 +129,7 @@ public class MockApiController {
         if (projectId == null || projectId.isBlank()) {
             // Default project ID if not provided
             projectId = UUID.randomUUID().toString();
-            logger.debug("No X-Project-Id header found, using generated ID: {}", projectId);
+            log.debug("No X-Project-Id header found, using generated ID: {}", projectId);
         }
         return projectId;
     }
@@ -165,7 +159,7 @@ public class MockApiController {
      * Log incoming request details.
      */
     private void logRequest(HttpServletRequest request, String body) {
-        logger.info("Incoming request: {} {} | Headers: {} | Body size: {} bytes",
+        log.info("Incoming request: {} {} | Headers: {} | Body size: {} bytes",
                 request.getMethod(),
                 request.getRequestURI(),
                 getAllHeaders(request).size(),
@@ -176,7 +170,7 @@ public class MockApiController {
      * Log outgoing response details.
      */
     private void logResponse(HttpServletRequest request, MockApiResponse response) {
-        logger.info("Outgoing response: {} {} -> Status: {} | Headers: {} | Body size: {} bytes",
+        log.info("Outgoing response: {} {} -> Status: {} | Headers: {} | Body size: {} bytes",
                 request.getMethod(),
                 request.getRequestURI(),
                 response.getStatusCode(),
