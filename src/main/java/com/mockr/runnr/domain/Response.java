@@ -52,7 +52,7 @@ public class Response {
         @Column(name = "response_body", columnDefinition = "TEXT")
         private String responseBody;
 
-        @Column(name = "is_default")
+        @Column(name = "is_default", columnDefinition = "INTEGER")
         @Builder.Default
         private Boolean isDefault = false;
 
