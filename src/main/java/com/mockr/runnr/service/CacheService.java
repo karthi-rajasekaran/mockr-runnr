@@ -100,7 +100,7 @@ public class CacheService {
      * @param endpointId Endpoint UUID to load
      * @return Cached or freshly loaded endpoint wrapped in Optional
      */
-    @Cacheable(value = "endpoint", key = "#endpointId", unless = "#result == null || !#result.isPresent()")
+    @Cacheable(value = "endpoint", key = "#endpointId", unless = "#result == null")
     public Optional<Endpoint> getOrLoadEndpoint(UUID endpointId) {
         log.debug("Cache miss for endpoint, loading from repository: endpointId={}", endpointId);
         Optional<Endpoint> endpoint = endpointRepository.findByIdWithDetails(endpointId);
@@ -132,7 +132,7 @@ public class CacheService {
      * @param contextPath The context path to search for (e.g., "mockr", "/mockr/")
      * @return Cached or freshly loaded project wrapped in Optional
      */
-    @Cacheable(value = "project", key = "#contextPath", unless = "#result == null || !#result.isPresent()")
+    @Cacheable(value = "project", key = "#contextPath", unless = "#result == null")
     public Optional<Project> getOrLoadProjectByContextPath(String contextPath) {
         log.debug("Cache miss for project, loading from repository: contextPath={}", contextPath);
         Optional<Project> project = projectRepository.findByContextPath(contextPath);
