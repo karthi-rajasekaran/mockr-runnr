@@ -8,9 +8,6 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 /**
  * Endpoint Entity - Represents a mock API endpoint.
  * 
@@ -37,7 +34,7 @@ public class Endpoint {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(columnDefinition = "TEXT")
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, cascade = { CascadeType.PERSIST, CascadeType.MERGE })

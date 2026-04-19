@@ -8,9 +8,6 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 /**
  * Response Entity - Represents a mock response with conditions and headers.
  * 
@@ -38,7 +35,7 @@ public class Response {
 
         @Id
         @GeneratedValue(strategy = GenerationType.UUID)
-        @JdbcTypeCode(SqlTypes.VARCHAR)
+        @Column(columnDefinition = "TEXT")
         private UUID id;
 
         @ManyToOne(fetch = FetchType.LAZY, cascade = { CascadeType.PERSIST, CascadeType.MERGE })
@@ -56,7 +53,6 @@ public class Response {
         private String responseBody;
 
         @Column(name = "is_default")
-        @JdbcTypeCode(SqlTypes.INTEGER)
         @Builder.Default
         private Boolean isDefault = false;
 

@@ -196,7 +196,7 @@ public class MockApiController {
             if (!segment.isBlank()) {
                 // This is the first non-empty segment - the context path
                 log.debug("Extracted context path from URI {}: {}", requestUri, segment);
-                return segment;
+                return "/" + segment;
             }
         }
 

@@ -36,3 +36,18 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Database files ###
+*.db
+*.sqlite
+*.sqlite3
+
+### Environment files ###
+.env
+.env.local
+
+### Runtime/logs ###
+*.log
+*.pid
+*.pid.lock
+
