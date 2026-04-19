@@ -1,10 +1,9 @@
 package com.mockr.runnr.web;
 
-import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Optional;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -13,8 +12,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.mockr.runnr.domain.Project;
 import com.mockr.runnr.dto.MockApiResponse;
 import com.mockr.runnr.dto.MockRequest;
+import com.mockr.runnr.dto.ProjectContext;
+import com.mockr.runnr.service.CacheService;
 import com.mockr.runnr.service.MockApiService;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,6 +43,7 @@ import lombok.extern.slf4j.Slf4j;
 public class MockApiController {
 
     private final MockApiService mockApiService;
+    private final CacheService cacheService;
 
     /**
      * Catch-all handler for all HTTP requests on any path and method.
@@ -56,8 +59,8 @@ public class MockApiController {
             // Log incoming request
             logRequest(request, body);
 
-            // Extract project ID from header or generate default
-            String projectId = extractProjectId(request);
+            // Extract project context from context path (first path segment)
+            ProjectContext projectContext = extractProjectContext(request);
 
             // Capture all request details
             MockRequest mockRequest = new MockRequest.Builder()
@@ -66,7 +69,7 @@ public class MockApiController {
                     .body(body)
                     .headers(getAllHeaders(request))
                     .queryParameters(getAllQueryParameters(request))
-                    .projectId(projectId)
+                    .projectContext(projectContext)
                     .build();
 
             // Delegate to service for processing
@@ -121,17 +124,83 @@ public class MockApiController {
     }
 
     /**
-     * Extract project ID from request.
-     * Looks for X-Project-Id header, falls back to default.
+     * Extract project context from request path.
+     * 
+     * The URL format is: localhost:8091/{contextPath}/{endpoint}
+     * Example: localhost:8091/mockr/users/list
+     * 
+     * Context path is extracted from the first path segment and normalized.
+     * Handles edge cases:
+     * - Leading slash: /mockr
+     * - Trailing slash: mockr/
+     * - Both: /mockr/
+     * 
+     * Then looks up the project from cache using the normalized context path.
+     * 
+     * @param request The HTTP request
+     * @return ProjectContext with project details, or null if project not found
      */
-    private String extractProjectId(HttpServletRequest request) {
-        String projectId = request.getHeader("X-Project-Id");
-        if (projectId == null || projectId.isBlank()) {
-            // Default project ID if not provided
-            projectId = UUID.randomUUID().toString();
-            log.debug("No X-Project-Id header found, using generated ID: {}", projectId);
+    private ProjectContext extractProjectContext(HttpServletRequest request) {
+        String contextPath = extractContextPathFromRequest(request);
+
+        if (contextPath == null || contextPath.isBlank()) {
+            log.warn("No context path found in request: {}", request.getRequestURI());
+            return null;
         }
-        return projectId;
+
+        // Fetch project from cache using context path
+        Optional<Project> projectOpt = cacheService.getOrLoadProjectByContextPath(contextPath);
+
+        if (projectOpt.isPresent()) {
+            Project project = projectOpt.get();
+            log.debug("Found project for context path: {} -> projectId={}", contextPath, project.getId());
+
+            return new ProjectContext.Builder()
+                    .projectId(project.getId())
+                    .contextPath(project.getContextPath())
+                    .name(project.getName())
+                    .description(project.getDescription())
+                    .build();
+        } else {
+            log.warn("No project found for context path: {}", contextPath);
+            return null;
+        }
+    }
+
+    /**
+     * Extract and normalize context path from request URI.
+     * 
+     * The first path segment is the context path.
+     * Normalizes by removing leading/trailing slashes.
+     * 
+     * Examples:
+     * - /mockr/users/list -> mockr
+     * - /mockr/ -> mockr
+     * - /mockr -> mockr
+     * - / -> null or empty
+     * 
+     * @param request The HTTP request
+     * @return Normalized context path, or null if not found
+     */
+    private String extractContextPathFromRequest(HttpServletRequest request) {
+        String requestUri = request.getRequestURI();
+
+        if (requestUri == null || requestUri.isBlank() || requestUri.equals("/")) {
+            return null;
+        }
+
+        // Split by "/" and get first non-empty segment
+        String[] segments = requestUri.split("/");
+
+        for (String segment : segments) {
+            if (!segment.isBlank()) {
+                // This is the first non-empty segment - the context path
+                log.debug("Extracted context path from URI {}: {}", requestUri, segment);
+                return segment;
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -16,7 +16,7 @@ public class MockRequest {
     private final String body;
     private final Map<String, String> headers;
     private final Map<String, String> queryParameters;
-    private final String projectId;
+    private final ProjectContext projectContext;
 
     private MockRequest(Builder builder) {
         this.method = builder.method;
@@ -24,7 +24,7 @@ public class MockRequest {
         this.body = builder.body;
         this.headers = new HashMap<>(builder.headers);
         this.queryParameters = new HashMap<>(builder.queryParameters);
-        this.projectId = builder.projectId;
+        this.projectContext = builder.projectContext;
     }
 
     public String getMethod() {
@@ -47,8 +47,8 @@ public class MockRequest {
         return new HashMap<>(queryParameters);
     }
 
-    public String getProjectId() {
-        return projectId;
+    public ProjectContext getProjectContext() {
+        return projectContext;
     }
 
     @Override
@@ -56,7 +56,7 @@ public class MockRequest {
         return "MockRequest{" +
                 "method='" + method + '\'' +
                 ", path='" + path + '\'' +
-                ", projectId='" + projectId + '\'' +
+                ", projectContext=" + projectContext +
                 ", headers=" + headers.size() + " entries" +
                 ", queryParameters=" + queryParameters.size() + " entries" +
                 '}';
@@ -71,7 +71,7 @@ public class MockRequest {
         private String body;
         private final Map<String, String> headers = new HashMap<>();
         private final Map<String, String> queryParameters = new HashMap<>();
-        private String projectId;
+        private ProjectContext projectContext;
 
         public Builder method(String method) {
             this.method = method;
@@ -108,8 +108,8 @@ public class MockRequest {
             return this;
         }
 
-        public Builder projectId(String projectId) {
-            this.projectId = projectId;
+        public Builder projectContext(ProjectContext projectContext) {
+            this.projectContext = projectContext;
             return this;
         }
 

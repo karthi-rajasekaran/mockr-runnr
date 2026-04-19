@@ -10,7 +10,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = "projects")
+@Table(name = "project")
 @Getter
 @Setter
 public class Project {
@@ -24,4 +24,7 @@ public class Project {
     private String name;
 
     private String description;
+
+    @Column(name = "context_path", unique = true, nullable = false)
+    private String contextPath;
 }

@@ -74,6 +74,18 @@
 			<artifactId>junit-platform-launcher</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<!-- Caffeine Cache -->
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+		</dependency>
+
+		<!-- Spring Boot Cache Starter (for @Cacheable, @CacheEvict support) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-cache</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -100,18 +112,9 @@
 					<source>17</source>
 					<target>17</target>
 					<encoding>UTF-8</encoding>
-				</configuration>
-			</plugin>
-
-			<!-- Maven Surefire Plugin for Tests -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-surefire-plugin</artifactId>
-				<configuration>
-					<includes>
-						<include>**/*Tests.java</include>
-						<include>**/*Test.java</include>
-					</includes>
+				<compilerArgs>
+					<arg>-parameters</arg>
+				</compilerArgs>
 				</configuration>
 			</plugin>
 		</plugins>

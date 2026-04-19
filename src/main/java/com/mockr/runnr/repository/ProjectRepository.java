@@ -1,5 +1,6 @@
 package com.mockr.runnr.repository;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -23,4 +24,14 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
      */
     @Query("SELECT COUNT(p) > 0 FROM Project p WHERE p.name = :name")
     boolean existsByName(@Param("name") String name);
+
+    /**
+     * Find project by context path.
+     * Context path is used for request routing in the runtime engine.
+     * 
+     * @param contextPath The context path to search for
+     * @return Optional containing the project if found
+     */
+    @Query("SELECT p FROM Project p WHERE p.contextPath = :contextPath")
+    Optional<Project> findByContextPath(@Param("contextPath") String contextPath);
 }
