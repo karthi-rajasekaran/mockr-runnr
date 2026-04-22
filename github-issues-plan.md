@@ -799,89 +799,207 @@ Enable future response types by extending Strategy interface.
 
 ---
 
-## Issue 9: Create Default Fallback Response Handler
+## Issue 9: Create Smart Response Resolver for Specific Match Selection
 
 ### Title
 
-Create default fallback response handler for non-matching requests
+Create smart response resolver to evaluate all endpoint responses and return the most specific matched response
 
 ### Goal
 
-Implement default response handler to return configured fallback response when no endpoint matches the incoming request. Prevent 404 errors and provide configurable default behavior.
+Implement a response resolution engine that:
+
+1. Takes an already-matched endpoint and incoming request
+2. Evaluates all configured responses for that endpoint
+3. Returns the response with the highest condition match specificity
+4. Returns 404 if no responses match conditions
+
+No fallback or default response logic needed—this is purely about selecting the best response from available candidates.
 
 ### Low Level Design
 
 #### Framework / Tech
 
-- Strategy Pattern for fallback strategies
-- Configuration for default response
-- Spring @Configuration for default bean setup
+- ConditionEvaluator from Issue 7 (reuse for condition matching)
+- ResponseBuilder from Issue 8 (reuse for response construction)
+- Scoring Engine for best-match selection
+- Spring @Service with constructor injection
+- Separate caches: responses-by-endpoint and conditions-by-endpoint (per Issue 5 model)
+- Sequential evaluation (no parallel processing for MVP)
 
 #### Suggested Classes
 
 ```
-FallbackResponseHandler
-FallbackResponse
-FallbackStrategy enum (RETURN_CONFIGURED, RETURN_404, RETURN_CUSTOM)
-DefaultResponseConfig
+ResponseResolver
+ResponseSelectionEngine
+ResponseCandidate
+ResponseScore
 ```
 
 #### Suggested Methods
 
 ```
-FallbackResponseHandler:
-  - handle(MockRequest request, Long projectId) : ResponseEntity<?>
-  - getDefaultResponse() : FallbackResponse
+ResponseResolver:
+  - resolve(MockRequest request, Long endpointId) : ResponseEntity<?>
 
-FallbackResponse:
-  - int getStatusCode()
-  - String getBody()
-  - Map<String, String> getHeaders()
+ResponseSelectionEngine:
+  - findBestMatch(List<ResponseCandidate> candidates) : Optional<MockResponse>
+  - calculateScore(List<Condition> conditions, MockRequest request) : int
+
+ConditionEvaluator (from Issue 7, injected):
+  - evaluate(MockRequest request, List<Condition> conditions) : boolean
+
+ResponseBuilder (from Issue 8, injected):
+  - withStatus(int) : ResponseBuilder
+  - withBody(String) : ResponseBuilder
+  - build() : ResponseEntity<?>
 ```
 
 #### Inputs / Outputs
 
 ```
 Input:
-- Request that did not match any endpoint
-- Project ID
+- Incoming MockRequest (from Issue 4: headers, query params, body, path variables)
+- Endpoint ID (already matched via Issue 6)
+- All responses for endpoint (from cache or database)
+- All conditions for endpoint (from cache or database)
 
 Output:
-- Default ResponseEntity (e.g., 404 or configured response)
+- Best matching ResponseEntity (constructed via ResponseBuilder Issue 8)
+- HTTP 404 if no responses match
 ```
 
-#### Flow
+### Matching Rules
 
-1. Request does not match any endpoint pattern
-2. FallbackResponseHandler.handle() is called
-3. Load default response for project from database (if configured)
-4. If configured response exists, return it
-5. If not configured, return 404 with error message
-6. Log fallback event (request path, method, reason)
+**Rule 1: Full Condition Match Required**
+
+- All conditions inside a response must match the request
+- Uses ConditionEvaluator from Issue 7
+- If even one condition fails → response is rejected
+
+**Rule 2: Highest Specificity Wins**
+
+- Specificity score = number of matched conditions
+- Response with most conditions wins
+- Response with 0 conditions = lowest priority (edge case for future optimization)
+
+**Rule 3: Tie Breaker** (in strict order)
+
+1. Use `priority` field (ascending—lower value = higher priority)
+2. Use `createdAt` (latest first) if priority tied
+3. Use `responseId` descending (highest ID first) as final deterministic tiebreaker
+
+**Rule 4: No Match**
+
+- If no conditional responses match → return HTTP 404
+- No fallback/default response (separate concern for future issue in Backlog.md)
+
+### Cache Structure
+
+Responses and conditions cached separately per endpoint (10-minute TTL):
+
+```
+Cache: responses-by-endpoint:{endpointId}
+├─ [{responseId, statusCode, headers, body, type, priority, createdAt}, ...]
+
+Cache: conditions-by-endpoint:{endpointId}
+├─ [{responseId, conditions=[{key, operator, value}]}, ...]
+```
+
+- Both caches use Caffeine (Issue 5) with 10-minute TTL
+- Both caches are thread-safe (Caffeine built-in)
+- Load both caches together on first endpoint request
+- Thread-safe updates deferred to Backlog.md
+
+### Flow
+
+1. Request path/method matched to endpoint (Issue 6)
+2. Load responses and conditions for endpoint from cache (separate loads)
+3. **Evaluate each response sequentially**:
+   - Use ConditionEvaluator (Issue 7) to evaluate all conditions
+   - If ALL match → add to candidates with score = condition count
+   - If ANY fails → skip response
+4. If no candidates → return HTTP 404 (via ResponseBuilder Issue 8)
+5. If candidates exist:
+   - Select response with highest score
+   - Tie-break: priority (asc), then createdAt (latest), then responseId (desc)
+6. Fetch response (statusCode, headers, body, type) from response object
+7. Use ResponseBuilder (Issue 8) to construct ResponseEntity
+8. Basic logging: responseId, score, condition count
+
+### Example Scenario
+
+**Endpoint:** `POST /payment`
+
+**Response 1:**
+
+- Conditions: `[{key: "header.x-api-key", operator: EQ, value: "123"}]`
+- Score: 1
+
+**Response 2:**
+
+- Conditions: `[{key: "header.x-api-key", operator: EQ, value: "123"}, {key: "header.x-corr-id", operator: EQ, value: "abc123"}]`
+- Score: 2
+
+**Response 3:**
+
+- Conditions: `[{key: "header.x-api-key", operator: EQ, value: "999"}]`
+- Score: 0 (rejected—condition doesn't match)
+
+**Incoming Request:**
+
+```
+POST /payment
+x-api-key: 123
+x-corr-id: abc123
+```
+
+**Result:** Response 2 selected (highest score = 2, all conditions match)
 
 ### Acceptance Criteria
 
-- Fallback handler returns configured default response if available
-- Fallback handler returns 404 if no default configured
-- Default response includes status, headers, body
-- Fallback events are logged
-- FallbackResponseHandler is injectable service
-- Default response is cacheable (loaded once per project)
+- ✅ Endpoint responses evaluated only after endpoint match (Issue 6)
+- ✅ All responses evaluated (no first-match logic)
+- ✅ Only fully matched responses are candidates (ALL conditions must match)
+- ✅ ConditionEvaluator from Issue 7 injected and used
+- ✅ Most specific response (highest condition count) is selected
+- ✅ Tie-breaking: priority (asc), createdAt (latest), responseId (desc)
+- ✅ HTTP 404 returned when no responses match
+- ✅ Responses cached separately per endpoint (10-minute TTL)
+- ✅ Conditions cached separately per endpoint (10-minute TTL)
+- ✅ Resolver implemented as injectable Spring @Service
+- ✅ Constructor injection for ConditionEvaluator, ResponseBuilder, CacheService
+- ✅ Basic logging: selected responseId, score, condition count
+- ✅ ResponseBuilder from Issue 8 used for response construction
+- ✅ Sequential evaluation (no parallel/multi-threading)
+- ✅ No default response fallback logic in this issue
 
 ### Priority
 
-Medium
+High
 
 ### Copilot Coding Prompt
 
 ```
-Create FallbackResponseHandler for non-matching requests.
-Load default response from database for the project.
-If default response exists, return it via ResponseEntity.
-If no default response, return 404 with descriptive error message.
-Log fallback events (path, method, status).
-Use ResponseBuilder to construct fallback response.
-Fallback responses should also be cached.
+Create ResponseResolver for smart response selection.
+
+After endpoint path/method is matched:
+
+1. Inject ConditionEvaluator (Issue 7), ResponseBuilder (Issue 8), CacheService (Issue 5).
+2. Load responses and conditions for endpoint from separate caches.
+3. For each response sequentially:
+   - Use ConditionEvaluator.evaluate(request, conditions) to check ALL conditions.
+   - If ALL match, score = condition count, add to candidates.
+   - If ANY fails, skip response.
+4. If no candidates, return HTTP 404 using ResponseBuilder.
+5. Select response with highest score.
+6. Tie-break: priority (ascending), then createdAt (latest), then responseId (descending).
+7. Fetch response details (statusCode, headers, body, type).
+8. Use ResponseBuilder to create ResponseEntity with response type from Issue 8.
+9. Log: responseId, score, condition count.
+10. Implement as injectable Spring @Service with constructor injection only.
+11. Evaluate sequentially, no parallel processing.
+12. Caches are thread-safe (Caffeine), no concurrent mutation needed for MVP.
 ```
 
 ---
@@ -992,20 +1110,38 @@ Error responses must be JSON.
 2. **Issue 2**: Create JPA entities (data model)
 3. **Issue 3**: Create repositories (data access)
 4. **Issue 4**: Create REST controller (entry point)
-5. **Issue 6**: Create path matcher (core logic)
-6. **Issue 7**: Create condition evaluator (core logic)
-7. **Issue 8**: Create response builder (response handling)
-8. **Issue 5**: Create cache service (optimization)
-9. **Issue 9**: Create fallback handler (edge cases)
+5. **Issue 5**: Create cache service (optimization foundation)
+6. **Issue 6**: Create path matcher (core logic)
+7. **Issue 7**: Create condition evaluator (core logic)
+8. **Issue 8**: Create response builder (response handling)
+9. **Issue 9**: Create smart response resolver (core matching logic) - **DEPENDS ON 5, 7, 8**
 10. **Issue 10**: Create exception handler (error management)
+
+**Note**: Issue 5 moved before Issues 7-8 to ensure caching infrastructure is available for Issue 9
 
 ---
 
 ## Summary
 
 - **Total Issues**: 10
-- **High Priority**: 4 (Issues 1, 2, 3, 4, 6)
-- **Medium Priority**: 6 (Issues 5, 7, 8, 9, 10)
+- **High Priority**: 5 (Issues 1, 2, 3, 4, 6, 9)
+- **Medium Priority**: 5 (Issues 5, 7, 8, 10)
 - **Estimated Scope**: Vertical slice to working MVP
 - **Architecture**: Clean, layered, extensible
 - **Ready for**: GitHub Issues + Copilot coding
+
+---
+
+## Related Documents
+
+- **Backlog.md**: Future optimizations, enhancements, and performance improvements
+  - Logging & observability strategies
+  - Performance & scalability optimizations
+  - Cache & thread safety improvements
+  - Entry-point validation rules (Mockr-Keepr/Weavr)
+  - Template variable replacement for dynamic responses
+  - Default response handler (post-Issue 9)
+  - Analytics & usage tracking
+  - And 4+ more backlog items
+
+**See Backlog.md for comprehensive list of post-MVP improvements (~32-47 hours estimated).**

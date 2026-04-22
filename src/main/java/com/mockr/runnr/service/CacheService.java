@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -63,7 +62,7 @@ public class CacheService {
      * 
      * On first access or cache miss:
      * - Loads all endpoints from repository
-     * - Includes responses, conditions, and headers (FETCH JOIN)
+     * - Includes responses, conditions, and headers via @EntityGraph
      * - Stores in cache for subsequent accesses
      * 
      * On cache hit:
@@ -76,7 +75,7 @@ public class CacheService {
     @Cacheable(value = "endpoints", key = "#projectId", unless = "#result == null || #result.isEmpty()")
     public List<Endpoint> getOrLoadEndpoints(UUID projectId) {
         log.debug("Cache miss for endpoints, loading from repository: projectId={}", projectId);
-        List<Endpoint> endpoints = endpointRepository.findAllByProjectIdWithDetails(projectId);
+        List<Endpoint> endpoints = endpointRepository.findAllByProjectId(projectId);
         log.debug("Loaded {} endpoints from repository: projectId={}", endpoints.size(), projectId);
         return endpoints;
     }
@@ -90,7 +89,7 @@ public class CacheService {
      * 
      * On first access or cache miss:
      * - Loads endpoint from repository
-     * - Includes responses, conditions, and headers (FETCH JOIN)
+     * - Includes responses, conditions, and headers via @EntityGraph
      * - Stores in cache for subsequent accesses
      * 
      * On cache hit:
@@ -103,7 +102,7 @@ public class CacheService {
     @Cacheable(value = "endpoint", key = "#endpointId", unless = "#result == null")
     public Optional<Endpoint> getOrLoadEndpoint(UUID endpointId) {
         log.debug("Cache miss for endpoint, loading from repository: endpointId={}", endpointId);
-        Optional<Endpoint> endpoint = endpointRepository.findByIdWithDetails(endpointId);
+        Optional<Endpoint> endpoint = endpointRepository.findById(endpointId);
         if (endpoint.isPresent()) {
             log.debug("Loaded endpoint from repository: endpointId={}", endpointId);
         } else {
