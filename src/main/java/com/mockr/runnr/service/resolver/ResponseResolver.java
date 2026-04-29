@@ -6,6 +6,8 @@ import com.mockr.runnr.domain.ResponseHeader;
 import com.mockr.runnr.exception.ResponseResolutionException;
 import com.mockr.runnr.matcher.ConditionEvaluator;
 import com.mockr.runnr.matcher.EvaluationContext;
+import com.mockr.runnr.matcher.body.BodyParser;
+import com.mockr.runnr.matcher.body.BodyParserRegistry;
 import com.mockr.runnr.builder.ResponseBuilder;
 import com.mockr.runnr.builder.ResponseStrategyFactory;
 import com.mockr.runnr.builder.ResponseType;
@@ -97,7 +99,7 @@ public class ResponseResolver {
                 // Use ConditionEvaluator (Issue 7) to check ALL conditions match
                 boolean allMatch = conditionEvaluator.evaluate(
                         conditions,
-                        toEvaluationContext(mockRequest));
+                        toEvaluationContext(mockRequest, endpoint));
 
                 if (allMatch) {
                     // Score = number of matched conditions (specificity)
@@ -143,7 +145,8 @@ public class ResponseResolver {
 
             ResponseCandidate best = bestCandidate.get();
 
-            // Step 4: Construct response using ResponseBuilder with headers and content type
+            // Step 4: Construct response using ResponseBuilder with headers and content
+            // type
             ResponseEntity<?> response = buildResponseEntity(best);
 
             logger.info("Response resolved: id={}, score={}, contentType={}",
@@ -167,26 +170,72 @@ public class ResponseResolver {
     }
 
     /**
-     * Convert MockRequest to EvaluationContext for ConditionEvaluator (Issue 7).
-     * EvaluationContext holds headers, query params, and path variables needed for
-     * condition evaluation.
+     * Convert MockRequest to EvaluationContext with unified field map.
+     * 
+     * Builds single unified map containing all request fields with full-path keys:
+     * - "header.content-type" → value
+     * - "query.page" → value
+     * - "path.userId" → value
+     * - "body.username" → value (if present)
+     * - "body.items[0].id" → value (flattened from JSON)
+     * 
+     * Body parsing is determined by endpoint's requestContentType field first,
+     * then falls back to Content-Type header if not configured.
+     * If body parsing fails, stores raw body under "body.raw".
      *
      * @param mockRequest Incoming request to convert
-     * @return EvaluationContext for condition evaluation
+     * @param endpoint    Endpoint configuration with requestContentType
+     * @return EvaluationContext with unified field map
      */
-    private EvaluationContext toEvaluationContext(MockRequest mockRequest) {
-        // Note: Adjust based on actual EvaluationContext builder structure
-        Map<String, String> pathVariables = new HashMap<>(); // Extract from request if available
+    private EvaluationContext toEvaluationContext(MockRequest mockRequest, com.mockr.runnr.domain.Endpoint endpoint) {
+        Map<String, Object> fields = new HashMap<>();
 
-        return EvaluationContext.builder()
-                .headers(mockRequest.getHeaders())
-                .queryParameters(mockRequest.getQueryParameters())
-                .pathVariables(pathVariables)
-                .build();
+        // 1. Add headers with "header." prefix (case-insensitive keys)
+        if (mockRequest.getHeaders() != null && !mockRequest.getHeaders().isEmpty()) {
+            mockRequest.getHeaders().forEach((k, v) -> fields.put("header." + k.toLowerCase(), v));
+        }
+
+        // 2. Add query parameters with "query." prefix
+        if (mockRequest.getQueryParameters() != null && !mockRequest.getQueryParameters().isEmpty()) {
+            mockRequest.getQueryParameters().forEach((k, v) -> fields.put("query." + k.toLowerCase(), v));
+        }
+
+        // 3. Add path variables with "path." prefix (if available)
+        // TODO: Extract from PathMatcher or request context
+
+        // 4. Parse and add body fields with "body." prefix using endpoint-aware
+        // strategy
+        if (mockRequest.getBody() != null && !mockRequest.getBody().isBlank()) {
+            try {
+                // Use endpoint's requestContentType if configured, otherwise fall back to
+                // header
+                String contentTypeHeader = mockRequest.getHeaders().getOrDefault("content-type", "");
+                BodyParser parser = BodyParserRegistry.selectParserForEndpoint(
+                        endpoint.getRequestContentType(),
+                        contentTypeHeader);
+
+                Map<String, Object> bodyFields = parser.parse(mockRequest.getBody());
+
+                // Add all body fields with "body." prefix
+                bodyFields.forEach((k, v) -> fields.put("body." + k, v));
+
+                logger.debug("Parsed {} body fields from endpoint.requestContentType={}, fallback={}",
+                        bodyFields.size(), endpoint.getRequestContentType(), contentTypeHeader);
+            } catch (BodyParser.BodyParseException e) {
+                logger.warn("Failed to parse body as structured format, storing as raw: {}", e.getMessage());
+                fields.put("body.raw", mockRequest.getBody());
+            } catch (Exception e) {
+                logger.warn("Unexpected error parsing body", e);
+                fields.put("body.raw", mockRequest.getBody());
+            }
+        }
+
+        return EvaluationContext.builder().fields(fields).build();
     }
 
     /**
-     * Build ResponseEntity using ResponseBuilder with proper headers and content type handling.
+     * Build ResponseEntity using ResponseBuilder with proper headers and content
+     * type handling.
      * This method:
      * 1. Creates a new ResponseBuilder instance
      * 2. Sets status code, body, and content type
@@ -221,8 +270,10 @@ public class ResponseResolver {
      * Map content type string to ResponseType enum.
      * This is used to select the appropriate response strategy.
      *
-     * @param contentTypeString Content type from response (e.g., "application/json")
-     * @return ResponseType enum matching the content type, defaults to JSON if unknown
+     * @param contentTypeString Content type from response (e.g.,
+     *                          "application/json")
+     * @return ResponseType enum matching the content type, defaults to JSON if
+     *         unknown
      */
     private ResponseType mapContentTypeToResponseType(String contentTypeString) {
         if (contentTypeString == null || contentTypeString.isBlank()) {

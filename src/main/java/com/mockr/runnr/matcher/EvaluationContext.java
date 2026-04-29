@@ -4,84 +4,87 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Unified evaluation context containing all request fields.
+ * 
+ * Single immutable map with full-path keys for unified field resolution:
+ * - "header.content-type" → "application/json"
+ * - "query.page" → "1"
+ * - "path.userId" → "123"
+ * - "body.username" → "karthi"
+ * - "body.items[0].name" → "Product A"
+ * - "body.soap:Body.Element@version" → "1.0"
+ * 
+ * Values are Objects to support primitives, nulls, and nested structures
+ * from body parsers (JSON objects can contain numbers, booleans, etc).
+ */
 public class EvaluationContext {
 
-    private final Map<String, String> headers;
-    private final Map<String, String> queryParameters;
-    private final Map<String, String> pathVariables;
+    private final Map<String, Object> fields;
 
-    private EvaluationContext(Builder builder) {
-        this.headers = Collections.unmodifiableMap(new HashMap<>(builder.headers));
-        this.queryParameters = Collections.unmodifiableMap(new HashMap<>(builder.queryParameters));
-        this.pathVariables = Collections.unmodifiableMap(new HashMap<>(builder.pathVariables));
+    private EvaluationContext(Map<String, Object> fields) {
+        this.fields = Collections.unmodifiableMap(new HashMap<>(fields));
     }
 
-    public String resolve(String key) {
-        if (key == null || !key.contains(".")) {
+    /**
+     * Resolve a full-path field key.
+     * 
+     * @param fieldPath e.g., "body.username", "header.content-type",
+     *                  "body.items[0].name"
+     * @return Field value or null if not found
+     */
+    public Object resolveField(String fieldPath) {
+        if (fieldPath == null || fieldPath.isBlank()) {
             return null;
         }
-        int dotIndex = key.indexOf('.');
-        String source = key.substring(0, dotIndex).toLowerCase();
-        String name = key.substring(dotIndex + 1);
 
-        return switch (source) {
-            case "header" -> resolveFromMap(headers, name, true);
-            case "query" -> resolveFromMap(queryParameters, name, false);
-            case "path" -> resolveFromMap(pathVariables, name, false);
-            default -> null;
-        };
+        return fields.get(fieldPath);
     }
 
-    private String resolveFromMap(Map<String, String> map, String key, boolean caseInsensitive) {
-        if (caseInsensitive) {
-            for (Map.Entry<String, String> entry : map.entrySet()) {
-                if (entry.getKey().equalsIgnoreCase(key)) {
-                    return entry.getValue();
-                }
-            }
-            return null;
-        }
-        return map.get(key);
-    }
-
-    public Map<String, String> getHeaders() {
-        return headers;
-    }
-
-    public Map<String, String> getQueryParameters() {
-        return queryParameters;
-    }
-
-    public Map<String, String> getPathVariables() {
-        return pathVariables;
+    /**
+     * @return Immutable unified fields map
+     */
+    public Map<String, Object> getFields() {
+        return fields;
     }
 
     public static Builder builder() {
         return new Builder();
     }
 
+    /**
+     * Builder for constructing evaluation context with unified field map.
+     */
     public static class Builder {
-        private final Map<String, String> headers = new HashMap<>();
-        private final Map<String, String> queryParameters = new HashMap<>();
-        private final Map<String, String> pathVariables = new HashMap<>();
+        private final Map<String, Object> fields = new HashMap<>();
 
-        public Builder headers(Map<String, String> headers) {
-            this.headers.putAll(headers);
+        /**
+         * Add all fields from a map.
+         * 
+         * @param fields Map of fields to add
+         * @return Builder for chaining
+         */
+        public Builder fields(Map<String, Object> fields) {
+            if (fields != null) {
+                this.fields.putAll(fields);
+            }
             return this;
         }
 
-        public Builder queryParameters(Map<String, String> queryParameters) {
-            this.queryParameters.putAll(queryParameters);
-            return this;
-        }
-
-        public Builder pathVariables(Map<String, String> pathVariables) {
-            this.pathVariables.putAll(pathVariables);
+        /**
+         * Add a single field.
+         * 
+         * @param key   Full field path (e.g., "header.content-type", "body.username")
+         * @param value Field value
+         * @return Builder for chaining
+         */
+        public Builder addField(String key, Object value) {
+            this.fields.put(key, value);
             return this;
         }
 
         public EvaluationContext build() {
-            return new EvaluationContext(this);
+            return new EvaluationContext(fields);
         }
     }
 }

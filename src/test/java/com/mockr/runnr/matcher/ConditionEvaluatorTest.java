@@ -49,11 +49,18 @@ class ConditionEvaluatorTest {
     private EvaluationContext contextWith(Map<String, String> headers,
             Map<String, String> queryParams,
             Map<String, String> pathVars) {
-        return EvaluationContext.builder()
-                .headers(headers)
-                .queryParameters(queryParams)
-                .pathVariables(pathVars)
-                .build();
+        Map<String, Object> fields = new java.util.HashMap<>();
+
+        // Add headers with "header." prefix
+        headers.forEach((k, v) -> fields.put("header." + k.toLowerCase(), v));
+
+        // Add query params with "query." prefix
+        queryParams.forEach((k, v) -> fields.put("query." + k.toLowerCase(), v));
+
+        // Add path vars with "path." prefix
+        pathVars.forEach((k, v) -> fields.put("path." + k, v));
+
+        return EvaluationContext.builder().fields(fields).build();
     }
 
     @Nested
@@ -79,7 +86,7 @@ class ConditionEvaluatorTest {
 
         @Test
         void shouldExtractHeaderValueCaseInsensitive() {
-            Condition condition = buildCondition("header.X-API-Key", ConditionOperator.EQ, "abc123");
+            Condition condition = buildCondition("header.x-api-key", ConditionOperator.EQ, "abc123");
             EvaluationContext ctx = contextWith(Map.of("x-api-key", "abc123"), Map.of(), Map.of());
             assertTrue(evaluator.evaluateSingle(condition, ctx));
         }

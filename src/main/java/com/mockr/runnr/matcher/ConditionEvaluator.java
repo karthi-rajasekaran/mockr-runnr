@@ -33,15 +33,18 @@ public class ConditionEvaluator {
     }
 
     public boolean evaluateSingle(Condition condition, EvaluationContext context) {
-        String lhs = condition.getLhs();
-        String actualValue = context.resolve(lhs);
+        String fieldPath = condition.getLhs();
+        Object fieldValue = context.resolveField(fieldPath);
+
+        // Convert Object to String for comparison
+        String actualValue = fieldValue == null ? null : fieldValue.toString();
         String expectedValue = condition.getRhs();
 
         ConditionOperatorStrategy strategy = operatorFactory.getOperator(condition.getOperation());
         boolean result = strategy.evaluate(actualValue, expectedValue);
 
-        log.debug("Condition: [{}] {} [{}] | actual=[{}] -> {}",
-                lhs, condition.getOperation(), expectedValue, actualValue, result);
+        log.debug("Condition: [{}] {} [{}] | actual=[{}] | fieldValue=[{}] -> {}",
+                fieldPath, condition.getOperation(), expectedValue, actualValue, fieldValue, result);
 
         return result;
     }

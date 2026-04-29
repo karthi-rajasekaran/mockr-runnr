@@ -3,6 +3,8 @@ package com.mockr.runnr.domain;
 import jakarta.persistence.*;
 import lombok.*;
 
+import com.mockr.runnr.enums.ContentType;
+
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -49,6 +51,11 @@ public class Endpoint {
 
     @Column(columnDefinition = "TEXT")
     private String description;
+
+    @Column(name = "request_content_type", length = 50)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private ContentType requestContentType = ContentType.APPLICATION_JSON;
 
     @OneToMany(cascade = { CascadeType.PERSIST, CascadeType.MERGE,
             CascadeType.REMOVE }, orphanRemoval = true, fetch = FetchType.LAZY, mappedBy = "endpoint")
